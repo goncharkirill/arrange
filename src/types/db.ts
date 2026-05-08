@@ -7,28 +7,37 @@ export interface Database {
         Row: Band
         Insert: Omit<Band, 'id'> & { id?: string }
         Update: Partial<Band>
+        Relationships: []
       }
       songs: {
         Row: Song
         Insert: Omit<Song, 'id' | 'created_at' | 'updated_at'> & { id?: string }
         Update: Partial<Song>
+        Relationships: []
       }
       blocks: {
         Row: Block
         Insert: Omit<Block, 'id'> & { id?: string }
         Update: Partial<Block>
+        Relationships: []
       }
       setlists: {
         Row: Setlist
         Insert: Omit<Setlist, 'id'> & { id?: string }
         Update: Partial<Setlist>
+        Relationships: []
       }
       setlist_songs: {
         Row: SetlistSong
         Insert: Omit<SetlistSong, 'id'> & { id?: string }
         Update: Partial<SetlistSong>
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
 
