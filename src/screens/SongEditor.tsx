@@ -251,10 +251,11 @@ export function SongEditor() {
   // ── Load ──
   useEffect(() => {
     if (!id) return
+    const songId = id // narrow to string for use inside async closure
     async function load() {
       const [songRes, blocksRes, bandsRes] = await Promise.all([
-        supabase.from('songs').select('*').eq('id', id).single(),
-        supabase.from('blocks').select('*').eq('song_id', id).order('position'),
+        supabase.from('songs').select('*').eq('id', songId).single(),
+        supabase.from('blocks').select('*').eq('song_id', songId).order('position'),
         supabase.from('bands').select('*').order('name'),
       ])
       if (songRes.data) setSong(songRes.data as Song)
@@ -289,7 +290,9 @@ export function SongEditor() {
 
   async function updateBlock(blockId: string, patch: Partial<Block>) {
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...patch } : b))
-    await supabase.from('blocks').update(patch).eq('id', blockId)
+    // cast needed: ChordVoicing[] is not assignable to Json in the generated DB type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('blocks').update(patch as any).eq('id', blockId)
   }
 
   async function deleteBlock(blockId: string) {
