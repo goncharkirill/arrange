@@ -358,6 +358,12 @@ export function SongEditor() {
           />
 
           {saving && <span className="shrink-0 text-xs text-muted-foreground">Сохраняю...</span>}
+          <button
+            onClick={() => navigate(`/songs/${song.id}/concert`)}
+            className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            ▶ Концерт
+          </button>
         </div>
       </div>
 
