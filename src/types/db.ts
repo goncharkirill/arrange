@@ -88,6 +88,7 @@ export type Database = {
           lyrics: string | null
           bass_notes: string | null
           note: string | null
+          time_signature: string | null
         }
         Insert: {
           id?: string
@@ -101,6 +102,7 @@ export type Database = {
           lyrics?: string | null
           bass_notes?: string | null
           note?: string | null
+          time_signature?: string | null
         }
         Update: {
           id?: string
@@ -114,6 +116,7 @@ export type Database = {
           lyrics?: string | null
           bass_notes?: string | null
           note?: string | null
+          time_signature?: string | null
         }
         Relationships: []
       }
@@ -191,7 +194,7 @@ export type Database = {
 }
 
 export type SongStatus = 'idea' | 'learning' | 'polishing' | 'setlist' | 'archive'
-export type KeyQuality = 'maj' | 'm' | '7' | 'm7' | 'maj7' | 'dim' | 'aug' | 'sus2' | 'sus4'
+export type KeyQuality = 'maj' | 'm'
 export type BlockType = 'intro' | 'verse' | 'pre-chorus' | 'chorus' | 'bridge' | 'solo' | 'outro' | 'break' | 'tag'
 
 export interface ChordVoicing {
@@ -232,6 +235,7 @@ export interface Block {
   lyrics: string | null
   bass_notes: string | null
   note: string | null
+  time_signature: string | null
 }
 
 export type Setlist = Database['public']['Tables']['setlists']['Row']
