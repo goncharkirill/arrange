@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Song } from '@/types/db'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const STATUS_LABEL: Record<Song['status'], string> = {
   idea: 'Идея',
@@ -12,92 +12,101 @@ const STATUS_LABEL: Record<Song['status'], string> = {
   archive: 'Архив',
 }
 
+const STATUS_COLOR: Record<Song['status'], string> = {
+  idea: 'text-zinc-400',
+  learning: 'text-amber-500',
+  polishing: 'text-blue-500',
+  setlist: 'text-green-500',
+  archive: 'text-stone-400',
+}
+
 export function SongsList() {
+  const navigate = useNavigate()
   const [songs, setSongs] = useState<Song[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
-
-  async function fetchSongs() {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      setError(error.message)
-    } else {
-      setSongs((data ?? []) as Song[])
-    }
-    setLoading(false)
-  }
 
   useEffect(() => {
+    async function fetchSongs() {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .order('name', { ascending: true })
+
+      if (error) {
+        setError(error.message)
+      } else {
+        setSongs((data ?? []) as Song[])
+      }
+      setLoading(false)
+    }
     fetchSongs()
   }, [])
 
-  async function addTestSong() {
-    setAdding(true)
-    const { error } = await supabase.from('songs').insert({
-      name: 'Тестовая песня',
-      original_artist: 'Test Artist',
-      status: 'idea',
-      key_root: 'A',
-      key_quality: 'maj',
-      bpm: 120,
-      time_signature: '4/4',
-    })
+  async function handleNew() {
+    const { data, error } = await supabase
+      .from('songs')
+      .insert({ name: 'Новая песня', status: 'idea' })
+      .select()
+      .single()
 
     if (error) {
       setError(error.message)
-    } else {
-      await fetchSongs()
+    } else if (data) {
+      navigate(`/songs/${data.id}`)
     }
-    setAdding(false)
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Песни</h1>
-          <Button onClick={addTestSong} disabled={adding}>
-            {adding ? 'Добавляю...' : '+ Тестовая песня'}
-          </Button>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <h1 className="text-lg font-semibold tracking-tight">Песни</h1>
+          <Button size="sm" onClick={handleNew}>+ Новая</Button>
         </div>
+      </div>
 
+      {/* Content */}
+      <div className="mx-auto max-w-2xl px-4 py-4">
         {error && (
           <div className="mb-4 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Ошибка: {error}
+            {error}
           </div>
         )}
 
         {loading ? (
-          <p className="text-muted-foreground text-sm">Загрузка...</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">Загрузка...</p>
         ) : songs.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            Песен пока нет. Нажми кнопку выше, чтобы добавить тестовую.
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Песен нет. Нажми «+ Новая».
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
             {songs.map((song) => (
-              <Card key={song.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{song.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    {song.original_artist && <span>{song.original_artist}</span>}
-                    {song.key_root && (
-                      <span className="font-mono">
-                        {song.key_root}{song.key_quality === 'maj' ? '' : song.key_quality}
-                      </span>
-                    )}
-                    {song.bpm && <span>{song.bpm} bpm</span>}
-                    <span className="ml-auto">{STATUS_LABEL[song.status]}</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <button
+                key={song.id}
+                onClick={() => navigate(`/songs/${song.id}`)}
+                className="w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{song.name}</div>
+                  {song.original_artist && (
+                    <div className="text-sm text-muted-foreground truncate">{song.original_artist}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0 text-sm">
+                  {song.key_root && (
+                    <span className="font-mono text-muted-foreground">
+                      {song.key_root}{song.key_quality === 'maj' || !song.key_quality ? '' : song.key_quality}
+                    </span>
+                  )}
+                  {song.bpm && (
+                    <span className="text-muted-foreground">{song.bpm}</span>
+                  )}
+                  <span className={STATUS_COLOR[song.status]}>{STATUS_LABEL[song.status]}</span>
+                </div>
+              </button>
             ))}
           </div>
         )}
