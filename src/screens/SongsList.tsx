@@ -27,7 +27,7 @@ export function SongsList() {
     if (error) {
       setError(error.message)
     } else {
-      setSongs(data ?? [])
+      setSongs((data ?? []) as Song[])
     }
     setLoading(false)
   }

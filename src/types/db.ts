@@ -190,18 +190,6 @@ export type Database = {
   }
 }
 
-export type Band = Database['public']['Tables']['bands']['Row']
-export type Song = Database['public']['Tables']['songs']['Row'] & {
-  status: SongStatus
-  key_quality: KeyQuality | null
-}
-export type Block = Database['public']['Tables']['blocks']['Row'] & {
-  type: BlockType
-  progression: ChordVoicing[] | null
-}
-export type Setlist = Database['public']['Tables']['setlists']['Row']
-export type SetlistSong = Database['public']['Tables']['setlist_songs']['Row']
-
 export type SongStatus = 'idea' | 'learning' | 'polishing' | 'setlist' | 'archive'
 export type KeyQuality = 'maj' | 'm' | '7' | 'm7' | 'maj7' | 'dim' | 'aug' | 'sus2' | 'sus4'
 export type BlockType = 'intro' | 'verse' | 'pre-chorus' | 'chorus' | 'bridge' | 'solo' | 'outro' | 'break' | 'tag'
@@ -211,3 +199,40 @@ export interface ChordVoicing {
   quality: string
   bass?: string | null
 }
+
+export type Band = Database['public']['Tables']['bands']['Row']
+
+export interface Song {
+  id: string
+  name: string
+  original_artist: string | null
+  band_id: string | null
+  key_root: string | null
+  key_quality: KeyQuality | null
+  bpm: number | null
+  time_signature: string | null
+  duration_seconds: number | null
+  tuning: string | null
+  status: SongStatus
+  youtube_url: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Block {
+  id: string
+  song_id: string
+  position: number
+  type: BlockType
+  custom_label: string | null
+  bars: number | null
+  repeat_count: number | null
+  progression: ChordVoicing[] | null
+  lyrics: string | null
+  bass_notes: string | null
+  note: string | null
+}
+
+export type Setlist = Database['public']['Tables']['setlists']['Row']
+export type SetlistSong = Database['public']['Tables']['setlist_songs']['Row']
