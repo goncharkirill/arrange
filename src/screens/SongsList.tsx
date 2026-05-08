@@ -63,7 +63,15 @@ export function SongsList() {
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <h1 className="text-lg font-semibold tracking-tight">Песни</h1>
-          <Button size="sm" onClick={handleNew}>+ Новая</Button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/setlists')}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Сетлисты →
+            </button>
+            <Button size="sm" onClick={handleNew}>+ Новая</Button>
+          </div>
         </div>
       </div>
 
