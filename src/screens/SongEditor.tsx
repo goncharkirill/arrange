@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Band, Song, Block, ChordVoicing, SongStatus, KeyQuality, BlockType } from '@/types/db'
@@ -53,9 +54,10 @@ interface ChordPickerProps {
   value: ChordVoicing | null
   onChange: (c: ChordVoicing) => void
   onClose: () => void
+  rect: DOMRect
 }
 
-function ChordPicker({ value, onChange, onClose }: ChordPickerProps) {
+function ChordPicker({ value, onChange, onClose, rect }: ChordPickerProps) {
   const [root, setRoot] = useState(value?.root ?? 'C')
   const [quality, setQuality] = useState(value?.quality ?? 'maj')
   const [bass, setBass] = useState(value?.bass ?? '')
@@ -77,11 +79,19 @@ function ChordPicker({ value, onChange, onClose }: ChordPickerProps) {
 
   const roots = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
 
-  return (
+  // Flip upward if not enough space below
+  const spaceBelow = window.innerHeight - rect.bottom
+  const pickerHeight = 280
+  const top = spaceBelow >= pickerHeight ? rect.bottom + 4 : rect.top - pickerHeight - 4
+
+  return createPortal(
     <div
       ref={ref}
       style={{
-        position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0,
+        position: 'fixed',
+        zIndex: 9999,
+        top,
+        left: Math.min(rect.left, window.innerWidth - 268),
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
@@ -171,7 +181,8 @@ function ChordPicker({ value, onChange, onClose }: ChordPickerProps) {
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -187,6 +198,7 @@ interface BlockRowProps {
 
 function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockRowProps) {
   const [pickerIndex, setPickerIndex] = useState<number | null>(null)
+  const [pickerRect, setPickerRect] = useState<DOMRect | null>(null)
   const [hovered, setHovered] = useState(false)
   const progression = block.progression ?? []
   const displayProg = transpose !== 0 ? transposeProgression(progression, transpose) : progression
@@ -272,7 +284,11 @@ function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockR
           {displayProg.map((chord, i) => (
             <div key={i} style={{ position: 'relative' }}>
               <button
-                onClick={() => setPickerIndex(pickerIndex === i ? null : i)}
+                onClick={e => {
+                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                  setPickerRect(rect)
+                  setPickerIndex(pickerIndex === i ? null : i)
+                }}
                 style={{
                   background: 'var(--surface-2)',
                   border: '1px solid var(--border)',
@@ -287,11 +303,12 @@ function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockR
               >
                 {formatChord(chord.root, chord.quality, chord.bass)}
               </button>
-              {pickerIndex === i && (
+              {pickerIndex === i && pickerRect && (
                 <ChordPicker
                   value={progression[i]}
                   onChange={c => { updateChord(i, c); setPickerIndex(null) }}
                   onClose={() => setPickerIndex(null)}
+                  rect={pickerRect}
                 />
               )}
               {hovered && (
