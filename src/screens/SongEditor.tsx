@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Band, Song, Block, ChordVoicing, SongStatus, KeyQuality, BlockType } from '@/types/db'
 import { ROOTS, QUALITIES, formatChord, transposeProgression, transposeNote } from '@/lib/chord'
@@ -35,16 +35,16 @@ const BLOCK_TYPES: { value: BlockType; label: string }[] = [
   { value: 'tag',         label: 'Tag' },
 ]
 
-const BLOCK_COLORS: Record<BlockType, string> = {
-  intro:        'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
-  verse:        'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-  'pre-chorus': 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-  chorus:       'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-  bridge:       'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
-  solo:         'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-  outro:        'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-  break:        'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-  tag:          'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getKeyTone(quality: string | null): 'major' | 'minor' | 'none' {
+  if (!quality) return 'none'
+  if (quality === 'm' || quality === 'm7' || quality === 'dim') return 'minor'
+  return 'major'
+}
+
+function isMinorQuality(quality: string): boolean {
+  return quality === 'm' || quality === 'm7' || quality === 'dim'
 }
 
 // ─── Chord Picker ─────────────────────────────────────────────────────────────
@@ -78,42 +78,95 @@ function ChordPicker({ value, onChange, onClose }: ChordPickerProps) {
   const roots = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
 
   return (
-    <div ref={ref} className="absolute z-50 mt-1 rounded-xl border border-border bg-card p-3 shadow-lg w-64">
-      <div className="mb-2 grid grid-cols-6 gap-1">
+    <div
+      ref={ref}
+      style={{
+        position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        padding: 12,
+        boxShadow: 'var(--shadow-md)',
+        width: 256,
+      }}
+    >
+      {/* Root grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3, marginBottom: 8 }}>
         {roots.map(r => (
-          <button key={r} onClick={() => setRoot(r)}
-            className={`rounded px-1 py-1 text-xs font-mono font-semibold transition-colors ${
-              root === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'
-            }`}>
+          <button
+            key={r}
+            onClick={() => setRoot(r)}
+            style={{
+              borderRadius: 4,
+              padding: '4px 2px',
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background 100ms',
+              background: root === r ? 'var(--accent)' : 'var(--surface-2)',
+              color: root === r ? 'var(--accent-fg)' : 'var(--text)',
+            }}
+          >
             {r}
           </button>
         ))}
       </div>
-      <div className="mb-2 grid grid-cols-3 gap-1">
+
+      {/* Quality grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3, marginBottom: 8 }}>
         {QUALITIES.map(q => (
-          <button key={q.value} onClick={() => setQuality(q.value)}
-            className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-              quality === q.value ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'
-            }`}>
+          <button
+            key={q.value}
+            onClick={() => setQuality(q.value)}
+            style={{
+              borderRadius: 4,
+              padding: '4px 6px',
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background 100ms',
+              background: quality === q.value ? 'var(--accent)' : 'var(--surface-2)',
+              color: quality === q.value ? 'var(--accent-fg)' : 'var(--text)',
+            }}
+          >
             {root}{q.label}
           </button>
         ))}
       </div>
-      <div className="mb-3 flex items-center gap-2">
-        <button onClick={() => setShowBass(v => !v)}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+
+      {/* Bass */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <button
+          onClick={() => setShowBass(v => !v)}
+          style={{ fontSize: 11.5, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
           {showBass ? '− убрать бас' : '+ slash bass'}
         </button>
         {showBass && (
-          <select value={bass} onChange={e => setBass(e.target.value)}
-            className="flex-1 rounded border border-border bg-background px-2 py-0.5 text-xs font-mono">
+          <select
+            value={bass}
+            onChange={e => setBass(e.target.value)}
+            style={{
+              flex: 1, borderRadius: 4,
+              border: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+              color: 'var(--text)',
+              padding: '2px 6px',
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             <option value="">—</option>
             {roots.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         )}
       </div>
-      <div className="flex gap-2">
-        <Button size="sm" className="flex-1" onClick={confirm}>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button size="sm" style={{ flex: 1 }} onClick={confirm}>
           {formatChord(root, quality, showBass && bass ? bass : null) || root}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
@@ -122,7 +175,7 @@ function ChordPicker({ value, onChange, onClose }: ChordPickerProps) {
   )
 }
 
-// ─── Block Row ────────────────────────────────────────────────────────────────
+// ─── Block Row (roadmap table row) ───────────────────────────────────────────
 
 interface BlockRowProps {
   block: Block
@@ -134,6 +187,7 @@ interface BlockRowProps {
 
 function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockRowProps) {
   const [pickerIndex, setPickerIndex] = useState<number | null>(null)
+  const [hovered, setHovered] = useState(false)
   const progression = block.progression ?? []
   const displayProg = transpose !== 0 ? transposeProgression(progression, transpose) : progression
 
@@ -151,85 +205,192 @@ function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockR
     onUpdate(block.id, { progression: progression.filter((_, idx) => idx !== i) })
   }
 
-  return (
-    <div className="rounded-lg border border-border bg-card p-3">
-      {/* Block header */}
-      <div className="mb-2 flex items-center gap-2 flex-wrap">
-        <select value={block.type}
-          onChange={e => onUpdate(block.id, { type: e.target.value as BlockType })}
-          className={`rounded-md px-2 py-0.5 text-xs font-semibold border-0 ${BLOCK_COLORS[block.type]}`}>
-          {BLOCK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+  const hasExtra = !!(block.bass_notes || block.note)
 
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <input type="number" min={1} max={64}
+  return (
+    <tr
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ background: hovered ? 'var(--surface-2)' : 'transparent', transition: 'background 80ms' }}
+    >
+      {/* Type badge with selector */}
+      <td style={{ padding: '10px 16px 10px 20px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+        <select
+          value={block.type}
+          onChange={e => onUpdate(block.id, { type: e.target.value as BlockType })}
+          className="type-badge"
+          data-t={block.type}
+          style={{ border: 'none', cursor: 'pointer', appearance: 'none', paddingRight: 7 }}
+        >
+          {BLOCK_TYPES.map(t => <option key={t.value} value={t.value}>{t.value}</option>)}
+        </select>
+      </td>
+
+      {/* Bars */}
+      <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--muted)', fontSize: 12 }}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>(</span>
+          <input
+            type="number" min={1} max={64}
             value={block.bars ?? ''}
             onChange={e => onUpdate(block.id, { bars: e.target.value ? Number(e.target.value) : null })}
-            placeholder="—"
-            className="w-10 rounded border border-border bg-background px-1.5 py-0.5 text-center font-mono text-xs" />
-          <span>тактов</span>
+            placeholder="?"
+            style={{
+              width: 28, textAlign: 'center',
+              fontFamily: 'var(--font-mono)', fontSize: 12,
+              border: 'none', background: 'transparent',
+              color: 'var(--text)', outline: 'none',
+            }}
+          />
+          <span style={{ fontFamily: 'var(--font-mono)' }}>)</span>
+          {block.repeat_count && block.repeat_count > 1 && (
+            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>×{block.repeat_count}</span>
+          )}
+          {variableTime && (
+            <select
+              value={block.time_signature ?? '4/4'}
+              onChange={e => onUpdate(block.id, { time_signature: e.target.value })}
+              style={{
+                fontSize: 11, fontFamily: 'var(--font-mono)',
+                border: '1px solid var(--border)', borderRadius: 3,
+                background: 'var(--surface-2)', color: 'var(--text)',
+                padding: '1px 4px', cursor: 'pointer',
+              }}
+            >
+              {TIME_SIGNATURES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+        </div>
+      </td>
+
+      {/* Chords + notes */}
+      <td style={{ padding: '10px 20px 10px 12px', verticalAlign: 'top', width: '100%' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, minHeight: 28 }}>
+          {displayProg.length === 0 && (
+            <span style={{ fontStyle: 'italic', color: 'var(--muted)', fontSize: 12 }}>N.C.</span>
+          )}
+          {displayProg.map((chord, i) => (
+            <div key={i} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setPickerIndex(pickerIndex === i ? null : i)}
+                style={{
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-xs)',
+                  padding: '2px 8px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer',
+                  color: isMinorQuality(chord.quality) ? 'var(--minor)' : 'var(--text)',
+                  transition: 'background 80ms',
+                }}
+              >
+                {formatChord(chord.root, chord.quality, chord.bass)}
+              </button>
+              {pickerIndex === i && (
+                <ChordPicker
+                  value={progression[i]}
+                  onChange={c => { updateChord(i, c); setPickerIndex(null) }}
+                  onClose={() => setPickerIndex(null)}
+                />
+              )}
+              {hovered && (
+                <button
+                  onClick={() => removeChord(i)}
+                  style={{
+                    position: 'absolute', top: -6, right: -6,
+                    width: 14, height: 14,
+                    borderRadius: '50%',
+                    background: 'var(--muted)',
+                    color: 'var(--surface)',
+                    border: 'none',
+                    fontSize: 9, lineHeight: 1,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >×</button>
+              )}
+            </div>
+          ))}
+          {hovered && (
+            <button
+              onClick={addChord}
+              style={{
+                borderRadius: 'var(--radius-xs)',
+                border: '1px dashed var(--border)',
+                padding: '2px 8px',
+                fontSize: 11.5,
+                color: 'var(--muted)',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+                transition: 'border-color 80ms, color 80ms',
+              }}
+            >
+              + аккорд
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <span>×</span>
-          <input type="number" min={1} max={16}
-            value={block.repeat_count ?? ''}
-            onChange={e => onUpdate(block.id, { repeat_count: e.target.value ? Number(e.target.value) : null })}
-            placeholder="1"
-            className="w-10 rounded border border-border bg-background px-1.5 py-0.5 text-center font-mono text-xs" />
-        </div>
-
-        {/* Per-block time signature — only when song is set to variable */}
-        {variableTime && (
-          <select
-            value={block.time_signature ?? '4/4'}
-            onChange={e => onUpdate(block.id, { time_signature: e.target.value })}
-            className="rounded border border-border bg-background px-2 py-0.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring">
-            {TIME_SIGNATURES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+        {/* Extra meta: bass_notes / note / lyrics */}
+        {hasExtra && (
+          <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
+            {block.bass_notes && (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--subtle)', textTransform: 'uppercase' }}>bass</span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)' }}>{block.bass_notes}</span>
+              </div>
+            )}
+            {block.note && (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--subtle)', textTransform: 'uppercase' }}>note</span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{block.note}</span>
+              </div>
+            )}
+          </div>
         )}
 
-        <button onClick={() => onDelete(block.id)}
-          className="ml-auto text-muted-foreground hover:text-destructive transition-colors text-sm"
-          title="Удалить блок">×</button>
-      </div>
+        {/* Lyrics textarea */}
+        <textarea
+          value={block.lyrics ?? ''}
+          onChange={e => onUpdate(block.id, { lyrics: e.target.value || null })}
+          placeholder="Текст (необязательно)..."
+          rows={1}
+          style={{
+            marginTop: 6,
+            width: '100%', resize: 'vertical',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--hairline)',
+            borderRadius: 'var(--radius-xs)',
+            padding: '4px 8px',
+            fontSize: 12,
+            color: 'var(--text-2)',
+            fontFamily: 'var(--font-ui)',
+            outline: 'none',
+            display: block.lyrics ? 'block' : hovered ? 'block' : 'none',
+          }}
+        />
+      </td>
 
-      {/* Chord progression */}
-      <div className="flex flex-wrap items-center gap-1.5 min-h-[2rem]">
-        {displayProg.map((chord, i) => (
-          <div key={i} className="relative">
-            <button
-              onClick={() => setPickerIndex(pickerIndex === i ? null : i)}
-              className="rounded-md bg-muted px-2.5 py-1 font-mono text-sm font-semibold hover:bg-muted/70 transition-colors">
-              {formatChord(chord.root, chord.quality, chord.bass)}
-            </button>
-            {pickerIndex === i && (
-              <ChordPicker
-                value={progression[i]}
-                onChange={c => { updateChord(i, c); setPickerIndex(null) }}
-                onClose={() => setPickerIndex(null)}
-              />
-            )}
-            <button onClick={() => removeChord(i)}
-              className="absolute -top-1.5 -right-1.5 h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/20 text-foreground text-[10px] leading-none hover:bg-destructive hover:text-destructive-foreground hidden group-hover:flex">
-              ×
-            </button>
-          </div>
-        ))}
-        <button onClick={addChord}
-          className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors font-mono">
-          + аккорд
-        </button>
-      </div>
-
-      {/* Lyrics */}
-      <textarea
-        value={block.lyrics ?? ''}
-        onChange={e => onUpdate(block.id, { lyrics: e.target.value || null })}
-        placeholder="Текст (необязательно)..."
-        rows={2}
-        className="mt-2 w-full resize-none rounded border border-border bg-background px-2 py-1.5 text-sm text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring" />
-    </div>
+      {/* Action: delete */}
+      <td style={{ padding: '10px 16px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+        {hovered && (
+          <button
+            onClick={() => onDelete(block.id)}
+            style={{
+              background: 'none', border: 'none',
+              color: 'var(--muted)',
+              cursor: 'pointer', fontSize: 16,
+              lineHeight: 1, padding: 0,
+              transition: 'color 100ms',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--minor)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+            title="Удалить блок"
+          >×</button>
+        )}
+      </td>
+    </tr>
   )
 }
 
@@ -251,7 +412,7 @@ export function SongEditor() {
   // ── Load ──
   useEffect(() => {
     if (!id) return
-    const songId = id // narrow to string for use inside async closure
+    const songId = id
     async function load() {
       const [songRes, blocksRes, bandsRes] = await Promise.all([
         supabase.from('songs').select('*').eq('id', songId).single(),
@@ -290,7 +451,6 @@ export function SongEditor() {
 
   async function updateBlock(blockId: string, patch: Partial<Block>) {
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...patch } : b))
-    // cast needed: ChordVoicing[] is not assignable to Json in the generated DB type
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await supabase.from('blocks').update(patch as any).eq('id', blockId)
   }
@@ -327,185 +487,516 @@ export function SongEditor() {
   }
 
   if (loading) return (
-    <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">Загрузка...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', fontSize: 13 }}>
+      Загрузка...
+    </div>
   )
   if (!song) return (
-    <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">Песня не найдена.</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', fontSize: 13 }}>
+      Песня не найдена.
+    </div>
   )
 
   const isVariableTime = song.time_signature === VARIABLE_TIME
   const keyDisplay = song.key_root
     ? `${transposeNote(song.key_root, transpose)}${song.key_quality === 'm' ? 'm' : ''}`
     : '—'
+  const keyTone = getKeyTone(song.key_quality)
+  const totalBars = blocks.reduce((acc, b) => acc + (b.bars ?? 0), 0)
+  const blocksWithBass = blocks.filter(b => b.bass_notes)
+  const blocksWithNote = blocks.filter(b => b.note)
+  const blocksWithLyrics = blocks.filter(b => b.lyrics)
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate('/')}
-            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors text-sm">
-            ← Назад
-          </button>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-          {/* Editable title — clearly styled as input */}
+      {/* ── Topbar ── */}
+      <div style={{
+        height: 52,
+        borderBottom: '1px solid var(--hairline)',
+        background: 'var(--bg)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '0 24px',
+        flexShrink: 0,
+      }}>
+        {/* Breadcrumb */}
+        <Link
+          to="/"
+          style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none', transition: 'color 120ms' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+        >
+          Songs
+        </Link>
+        <span style={{ color: 'var(--faint)', fontSize: 13 }}>/</span>
+        <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{song.name}</span>
+
+        <div style={{ flex: 1 }} />
+
+        {saving && <span style={{ fontSize: 12, color: 'var(--subtle)' }}>Сохраняю...</span>}
+
+        {/* Transpose controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => setTranspose(t => t - 1)}
+            style={{
+              width: 26, height: 26,
+              borderRadius: 'var(--radius-xs)',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              fontSize: 14, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >−</button>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 600,
+            color: transpose !== 0 ? 'var(--accent)' : 'var(--text)',
+            minWidth: 48, textAlign: 'center',
+          }}>
+            {transpose === 0 ? keyDisplay : (transpose > 0 ? `+${transpose}` : transpose)}
+          </span>
+          <button
+            onClick={() => setTranspose(t => t + 1)}
+            style={{
+              width: 26, height: 26,
+              borderRadius: 'var(--radius-xs)',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              fontSize: 14, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >+</button>
+          {transpose !== 0 && (
+            <>
+              <button
+                onClick={applyTranspose}
+                style={{
+                  fontSize: 12, padding: '3px 10px',
+                  borderRadius: 'var(--radius-xs)',
+                  border: '1px solid var(--accent)',
+                  background: 'var(--accent-bg)',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                }}
+              >Применить → {keyDisplay}</button>
+              <button
+                onClick={() => setTranspose(0)}
+                style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+              >Сброс</button>
+            </>
+          )}
+        </div>
+
+        {/* Concert button */}
+        <button
+          onClick={() => navigate(`/songs/${song.id}/concert`)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--accent)',
+            color: 'var(--accent-fg)',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0 14px', height: 30,
+            fontSize: 13, fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'opacity 120ms',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        >
+          ▶ Концерт
+        </button>
+      </div>
+
+      {/* ── Editor body ── */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 300px', overflow: 'hidden' }}>
+
+        {/* Left column */}
+        <div style={{ overflowY: 'auto', padding: '32px 48px 80px' }}>
+
+          {/* Song title */}
           <input
             value={song.name}
             onChange={e => updateMeta({ name: e.target.value })}
-            className="flex-1 min-w-0 rounded-md border border-transparent bg-transparent px-2 py-0.5 font-semibold text-base
-                       hover:border-border focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
             placeholder="Название песни"
+            style={{
+              display: 'block',
+              width: '100%',
+              fontSize: 30, fontWeight: 600,
+              letterSpacing: '-0.02em',
+              color: 'var(--text)',
+              border: 'none', outline: 'none',
+              background: 'transparent',
+              marginBottom: 4,
+              fontFamily: 'var(--font-ui)',
+            }}
           />
 
-          {saving && <span className="shrink-0 text-xs text-muted-foreground">Сохраняю...</span>}
-          <button
-            onClick={() => navigate(`/songs/${song.id}/concert`)}
-            className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
-          >
-            ▶ Концерт
-          </button>
-        </div>
-      </div>
+          {/* Subtitle: original artist */}
+          <input
+            value={song.original_artist ?? ''}
+            onChange={e => updateMeta({ original_artist: e.target.value || null })}
+            placeholder="originally by..."
+            style={{
+              display: 'block', width: '100%',
+              fontSize: 13.5, color: 'var(--muted)',
+              border: 'none', outline: 'none',
+              background: 'transparent',
+              marginBottom: 20,
+              fontFamily: 'var(--font-ui)',
+            }}
+          />
 
-      <div className="mx-auto max-w-2xl px-4 py-4 space-y-4">
-
-        {/* Meta */}
-        <div className="rounded-xl border border-border bg-card p-4 grid grid-cols-2 gap-3 text-sm">
-
-          {/* Band dropdown */}
-          <div className="col-span-2">
-            <label className="mb-1 block text-xs text-muted-foreground">Группа</label>
-            <select
-              value={song.band_id ?? ''}
-              onChange={e => updateMeta({ band_id: e.target.value || null })}
-              className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-              <option value="">— не выбрана —</option>
-              {bands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </div>
-
-          {/* Original artist */}
-          <div className="col-span-2">
-            <label className="mb-1 block text-xs text-muted-foreground">Оригинальный исполнитель</label>
-            <input
-              value={song.original_artist ?? ''}
-              onChange={e => updateMeta({ original_artist: e.target.value || null })}
-              placeholder="для кавер-версий"
-              className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
-          </div>
-
-          {/* Key */}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Тональность</label>
-            <div className="flex gap-1">
+          {/* Meta chips row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 32 }}>
+            {/* Key */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 999,
+              padding: '3px 10px',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--subtle)' }}>key</span>
+              <span className="key-chip" data-tone={keyTone} style={{ padding: '0 6px', border: 'none' }}>
+                {song.key_root ? `${song.key_root}${song.key_quality === 'm' ? 'm' : ''}` : '—'}
+              </span>
               <select
                 value={song.key_root ?? ''}
                 onChange={e => updateMeta({ key_root: e.target.value || null })}
-                className="flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                style={{
+                  border: 'none', background: 'transparent',
+                  fontSize: 11, color: 'var(--muted)', cursor: 'pointer',
+                  outline: 'none', appearance: 'none', width: 16,
+                }}
+              >
                 <option value="">—</option>
                 {ROOTS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
               <select
                 value={song.key_quality ?? 'maj'}
                 onChange={e => updateMeta({ key_quality: e.target.value as KeyQuality })}
-                className="w-24 rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                style={{
+                  border: 'none', background: 'transparent',
+                  fontSize: 11, color: 'var(--muted)', cursor: 'pointer',
+                  outline: 'none', appearance: 'none',
+                }}
+              >
                 {KEY_QUALITIES.map(q => <option key={q.value} value={q.value}>{q.label}</option>)}
+              </select>
+            </div>
+
+            {/* BPM */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 999,
+              padding: '3px 10px',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--subtle)' }}>bpm</span>
+              <input
+                type="number" min={20} max={300}
+                value={song.bpm ?? ''}
+                onChange={e => updateMeta({ bpm: e.target.value ? Number(e.target.value) : null })}
+                placeholder="—"
+                style={{
+                  width: 40,
+                  fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 500,
+                  border: 'none', background: 'transparent',
+                  color: 'var(--text)', outline: 'none',
+                  textAlign: 'center',
+                }}
+              />
+            </div>
+
+            {/* Time */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 999,
+              padding: '3px 10px',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--subtle)' }}>time</span>
+              <select
+                value={song.time_signature ?? '4/4'}
+                onChange={e => updateMeta({ time_signature: e.target.value })}
+                style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 500,
+                  border: 'none', background: 'transparent',
+                  color: 'var(--text)', outline: 'none', cursor: 'pointer',
+                }}
+              >
+                {TIME_SIGNATURES.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value={VARIABLE_TIME}>var.</option>
+              </select>
+            </div>
+
+            {/* Status */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 999,
+              padding: '3px 10px',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--subtle)' }}>status</span>
+              <select
+                value={song.status}
+                onChange={e => updateMeta({ status: e.target.value as SongStatus })}
+                style={{
+                  fontSize: 12.5,
+                  border: 'none', background: 'transparent',
+                  color: 'var(--text)', outline: 'none', cursor: 'pointer',
+                }}
+              >
+                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* Band */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 999,
+              padding: '3px 10px',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--subtle)' }}>группа</span>
+              <select
+                value={song.band_id ?? ''}
+                onChange={e => updateMeta({ band_id: e.target.value || null })}
+                style={{
+                  fontSize: 12.5,
+                  border: 'none', background: 'transparent',
+                  color: 'var(--text)', outline: 'none', cursor: 'pointer',
+                }}
+              >
+                <option value="">—</option>
+                {bands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
           </div>
 
-          {/* BPM */}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">BPM</label>
-            <input type="number" min={20} max={300}
-              value={song.bpm ?? ''}
-              onChange={e => updateMeta({ bpm: e.target.value ? Number(e.target.value) : null })}
-              placeholder="—"
-              className="w-full rounded border border-border bg-background px-3 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Статус</label>
-            <select value={song.status}
-              onChange={e => updateMeta({ status: e.target.value as SongStatus })}
-              className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-              {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-
-          {/* Time signature */}
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Размер</label>
-            <select
-              value={song.time_signature ?? '4/4'}
-              onChange={e => updateMeta({ time_signature: e.target.value })}
-              className="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-              {TIME_SIGNATURES.map(t => <option key={t} value={t}>{t}</option>)}
-              <option value={VARIABLE_TIME}>Изменяемый</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Transpose */}
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <span className="text-sm text-muted-foreground">Транспонирование</span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setTranspose(t => t - 1)}
-              className="h-7 w-7 rounded-md border border-border text-sm hover:bg-muted transition-colors flex items-center justify-center">−</button>
-            <span className="w-14 text-center font-mono text-sm font-semibold">
-              {transpose === 0 ? keyDisplay : (transpose > 0 ? `+${transpose}` : transpose)}
+          {/* Section: Form · Roadmap */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <span style={{
+              fontSize: 10.5, fontFamily: 'var(--font-mono)',
+              fontWeight: 600, letterSpacing: '0.08em',
+              color: 'var(--subtle)', textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}>
+              Form · Roadmap
             </span>
-            <button onClick={() => setTranspose(t => t + 1)}
-              className="h-7 w-7 rounded-md border border-border text-sm hover:bg-muted transition-colors flex items-center justify-center">+</button>
+            <div style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
+            <span style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              color: 'var(--muted)', whiteSpace: 'nowrap',
+            }}>
+              {blocks.length} секций · {totalBars} тактов
+            </span>
           </div>
-          {transpose !== 0 && (
+
+          {/* Roadmap table */}
+          <div style={{
+            border: '1px solid var(--hairline)',
+            borderRadius: 'var(--radius)',
+            overflow: 'hidden',
+            marginBottom: 24,
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--hairline)' }}>
+                  <th style={{ textAlign: 'left', padding: '7px 16px 7px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Секция</th>
+                  <th style={{ textAlign: 'left', padding: '7px 12px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Такты</th>
+                  <th style={{ textAlign: 'left', padding: '7px 12px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Аккорды / заметки</th>
+                  <th style={{ width: 32 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {blocks.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                      Нет блоков
+                    </td>
+                  </tr>
+                ) : (
+                  blocks.map(block => (
+                    <BlockRow
+                      key={block.id}
+                      block={block}
+                      transpose={transpose}
+                      variableTime={isVariableTime}
+                      onUpdate={updateBlock}
+                      onDelete={deleteBlock}
+                    />
+                  ))
+                )}
+
+                {/* Add block row */}
+                <tr style={{ borderTop: '1px dashed var(--hairline)' }}>
+                  <td colSpan={4}>
+                    <button
+                      onClick={addBlock}
+                      style={{
+                        display: 'block', width: '100%',
+                        padding: '10px 20px',
+                        background: 'transparent', border: 'none',
+                        color: 'var(--muted)',
+                        fontFamily: 'var(--font-mono)', fontSize: 12,
+                        textAlign: 'left', cursor: 'pointer',
+                        transition: 'color 100ms',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+                    >
+                      + Добавить блок
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Lyrics section */}
+          {blocksWithLyrics.length > 0 && (
             <>
-              <Button size="sm" variant="outline" onClick={applyTranspose}>
-                Применить → {keyDisplay}
-              </Button>
-              <button onClick={() => setTranspose(0)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                Сброс
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 10.5, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase' }}>
+                  Lyrics
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 16px', marginBottom: 24 }}>
+                {blocksWithLyrics.map(block => (
+                  <>
+                    <span key={`lbl-${block.id}`} className="type-badge" data-t={block.type} style={{ alignSelf: 'start', marginTop: 2 }}>
+                      {block.type}
+                    </span>
+                    <span key={`txt-${block.id}`} style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {block.lyrics}
+                    </span>
+                  </>
+                ))}
+              </div>
             </>
           )}
-        </div>
 
-        {/* Blocks */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Блоки</h2>
-            <button onClick={addBlock}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              + Добавить блок
+          {/* Danger zone */}
+          <div style={{ paddingTop: 16, borderTop: '1px solid var(--hairline)' }}>
+            <button
+              onClick={deleteSong}
+              style={{ fontSize: 12.5, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 100ms' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--minor)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+            >
+              Удалить песню
             </button>
           </div>
-
-          {blocks.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Нет блоков. Нажми «+ Добавить блок».
-            </p>
-          ) : (
-            blocks.map(block => (
-              <BlockRow
-                key={block.id}
-                block={block}
-                transpose={transpose}
-                variableTime={isVariableTime}
-                onUpdate={updateBlock}
-                onDelete={deleteBlock}
-              />
-            ))
-          )}
         </div>
 
-        {/* Danger zone */}
-        <div className="pt-4 pb-8">
-          <button onClick={deleteSong}
-            className="text-sm text-muted-foreground hover:text-destructive transition-colors">
-            Удалить песню
-          </button>
+        {/* ── Right rail ── */}
+        <div style={{
+          borderLeft: '1px solid var(--hairline)',
+          background: 'var(--surface-2)',
+          overflowY: 'auto',
+          padding: '24px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+        }}>
+
+          {/* Quick info */}
+          <section>
+            <h4 style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase', margin: '0 0 10px' }}>
+              Быстро
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 12.5 }}>
+              <span style={{ color: 'var(--subtle)' }}>Тон.</span>
+              <span className="key-chip" data-tone={keyTone}>{song.key_root ? `${song.key_root}${song.key_quality === 'm' ? 'm' : ''}` : '—'}</span>
+              <span style={{ color: 'var(--subtle)' }}>BPM</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{song.bpm ?? '—'}</span>
+              <span style={{ color: 'var(--subtle)' }}>Размер</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{song.time_signature ?? '—'}</span>
+              {song.tuning && <>
+                <span style={{ color: 'var(--subtle)' }}>Строй</span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{song.tuning}</span>
+              </>}
+            </div>
+          </section>
+
+          {/* Bass plan */}
+          {blocksWithBass.length > 0 && (
+            <section>
+              <h4 style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase', margin: '0 0 10px' }}>
+                Bass plan
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px' }}>
+                {blocksWithBass.map(block => (
+                  <>
+                    <span key={`bl-${block.id}`} className="type-badge" data-t={block.type}>{block.type}</span>
+                    <span key={`bt-${block.id}`} style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-2)', alignSelf: 'center' }}>{block.bass_notes}</span>
+                  </>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Cues / transitions */}
+          {blocksWithNote.length > 0 && (
+            <section>
+              <h4 style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase', margin: '0 0 10px' }}>
+                Cues / transitions
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px' }}>
+                {blocksWithNote.map(block => (
+                  <>
+                    <span key={`nl-${block.id}`} className="type-badge" data-t={block.type}>{block.type}</span>
+                    <span key={`nt-${block.id}`} style={{ fontSize: 12, color: 'var(--text-2)', alignSelf: 'center' }}>{block.note}</span>
+                  </>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Cheatsheet */}
+          <section>
+            <h4 style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase', margin: '0 0 10px' }}>
+              Cheatsheet
+            </h4>
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--muted)', lineHeight: 1.8, whiteSpace: 'pre' }}>
+              {`(N)    — N тактов\n×N     — повтор N раз\nN.C.   — no chord\ntacet  — баса нет\nhits   — акценты\nbreak  — все стопаются\nrit.   — замедление\nferm.  — fermata`}
+            </div>
+          </section>
+
+          {/* Notes field */}
+          <section>
+            <h4 style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase', margin: '0 0 10px' }}>
+              Заметки
+            </h4>
+            <textarea
+              value={song.notes ?? ''}
+              onChange={e => updateMeta({ notes: e.target.value || null })}
+              placeholder="Любые заметки о песне..."
+              rows={4}
+              style={{
+                width: '100%', resize: 'vertical',
+                border: '1px solid var(--hairline)',
+                borderRadius: 'var(--radius-xs)',
+                background: 'var(--surface)',
+                color: 'var(--text-2)',
+                padding: '8px 10px',
+                fontSize: 12.5, lineHeight: 1.5,
+                fontFamily: 'var(--font-ui)',
+                outline: 'none',
+              }}
+            />
+          </section>
         </div>
       </div>
     </div>

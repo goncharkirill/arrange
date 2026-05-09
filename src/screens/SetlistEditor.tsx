@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Setlist, Song } from '@/types/db'
 import { ROOTS } from '@/lib/chord'
@@ -20,6 +20,12 @@ type SetlistSongRow = {
     bpm: number | null
     original_artist: string | null
   }
+}
+
+function getKeyTone(quality: string | null): 'major' | 'minor' | 'none' {
+  if (!quality) return 'none'
+  if (quality === 'm') return 'minor'
+  return 'major'
 }
 
 export function SetlistEditor() {
@@ -201,272 +207,448 @@ export function SetlistEditor() {
   )
 
   if (loading) return (
-    <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', fontSize: 13 }}>
       Загрузка...
     </div>
   )
 
   if (!setlist) return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-sm text-muted-foreground">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--muted)', fontSize: 13 }}>
       <p>Сетлист не найден.</p>
-      <button onClick={() => navigate('/setlists')} className="hover:text-foreground transition-colors">
+      <button onClick={() => navigate('/setlists')} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>
         ← Назад
       </button>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => navigate('/setlists')}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          >
-            ✕
-          </button>
-          <input
-            value={setlist.name}
-            onChange={e => handleNameChange(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent text-lg font-semibold tracking-tight outline-none border border-transparent rounded px-1 hover:border-border focus:border-border transition-colors"
-          />
-          <button
-            onClick={() => navigate(`/setlists/${setlist.id}/concert`)}
-            className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            ▶ Концерт
-          </button>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+
+      {/* ── Topbar ── */}
+      <div style={{
+        height: 52,
+        borderBottom: '1px solid var(--hairline)',
+        background: 'var(--bg)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '0 24px',
+        flexShrink: 0,
+      }}>
+        {/* Breadcrumb */}
+        <Link
+          to="/setlists"
+          style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none', transition: 'color 120ms' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+        >
+          Setlists
+        </Link>
+        <span style={{ color: 'var(--faint)', fontSize: 13 }}>/</span>
+        <input
+          value={setlist.name}
+          onChange={e => handleNameChange(e.target.value)}
+          style={{
+            fontSize: 13, color: 'var(--text)', fontWeight: 500,
+            border: 'none', outline: 'none', background: 'transparent',
+            fontFamily: 'var(--font-ui)',
+          }}
+        />
+
+        <div style={{ flex: 1 }} />
+
+        {/* Concert button */}
+        <button
+          onClick={() => navigate(`/setlists/${setlist.id}/concert`)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--accent)',
+            color: 'var(--accent-fg)',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0 14px', height: 30,
+            fontSize: 13, fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'opacity 120ms',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        >
+          ▶ Концерт
+        </button>
       </div>
 
-      <div className="mx-auto max-w-2xl px-4 py-4 space-y-6">
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
         {error && (
-          <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
+          <div style={{ marginBottom: 16, color: 'var(--minor)', fontSize: 13 }}>{error}</div>
         )}
 
         {/* Meta */}
-        <div className="rounded-xl border border-border p-4 space-y-3">
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Дата</label>
+        <div style={{
+          border: '1px solid var(--hairline)',
+          borderRadius: 'var(--radius)',
+          background: 'var(--surface)',
+          padding: '16px 20px',
+          marginBottom: 24,
+          display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--subtle)', marginBottom: 4 }}>Дата</label>
               <input
                 type="date"
                 value={setlist.date ?? ''}
                 onChange={e => handleDateChange(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring transition-colors"
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-xs)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--text)',
+                  padding: '6px 10px',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
               />
             </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Площадка</label>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--subtle)', marginBottom: 4 }}>Площадка</label>
               <input
                 value={setlist.venue ?? ''}
                 onChange={e => handleVenueChange(e.target.value)}
                 placeholder="Название места"
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring transition-colors placeholder:text-muted-foreground"
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-xs)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--text)',
+                  padding: '6px 10px',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Заметки</label>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--subtle)', marginBottom: 4 }}>Заметки</label>
             <textarea
               value={setlist.notes ?? ''}
               onChange={e => handleNotesChange(e.target.value)}
               rows={2}
               placeholder="Любые заметки..."
-              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring transition-colors placeholder:text-muted-foreground resize-none"
+              style={{
+                width: '100%', resize: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-xs)',
+                background: 'var(--surface-2)',
+                color: 'var(--text)',
+                padding: '6px 10px',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'var(--font-ui)',
+              }}
             />
           </div>
         </div>
 
-        {/* Songs */}
-        <div>
-          <div className="mb-2 text-xs font-medium text-muted-foreground tracking-widest uppercase">
-            Песни · {items.length}
-          </div>
-
-          {items.length > 0 && (
-            <div className="divide-y divide-border rounded-xl border border-border overflow-hidden mb-3">
-              {items.map((item, index) => {
-                const song = item.songs
-                const keyRoot = item.custom_key_root ?? song.key_root
-                const keyQuality = item.custom_key_quality ?? song.key_quality
-                const keyLabel = keyRoot
-                  ? `${keyRoot}${keyQuality === 'm' ? 'm' : ''}`
-                  : null
-                const isExpanded = expanded.has(item.id)
-
-                return (
-                  <div key={item.id}>
-                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-                      {/* Position */}
-                      <span className="font-mono text-xs text-muted-foreground w-5 shrink-0 text-right">
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-
-                      {/* Song info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{song.name}</div>
-                        {song.original_artist && (
-                          <div className="text-xs text-muted-foreground truncate">{song.original_artist}</div>
-                        )}
-                      </div>
-
-                      {/* Key + BPM */}
-                      <div className="flex items-center gap-2 shrink-0 text-sm">
-                        {keyLabel && (
-                          <span className="font-mono text-muted-foreground">{keyLabel}</span>
-                        )}
-                        {song.bpm && (
-                          <span className="text-xs text-muted-foreground">{song.bpm}</span>
-                        )}
-                      </div>
-
-                      {/* Controls */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => moveItem(index, -1)}
-                          disabled={index === 0}
-                          className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors rounded"
-                          title="Выше"
-                        >↑</button>
-                        <button
-                          onClick={() => moveItem(index, 1)}
-                          disabled={index === items.length - 1}
-                          className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors rounded"
-                          title="Ниже"
-                        >↓</button>
-                        <button
-                          onClick={() => toggleExpand(item.id)}
-                          className={`h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors rounded ${isExpanded ? 'text-foreground' : ''}`}
-                          title="Детали"
-                        >▾</button>
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors rounded"
-                          title="Удалить"
-                        >×</button>
-                      </div>
-                    </div>
-
-                    {/* Expanded details */}
-                    {isExpanded && (
-                      <div className="px-4 pb-3 pt-1 bg-muted/20 space-y-3 border-t border-border/50">
-                        <div className="flex gap-3">
-                          <div>
-                            <label className="text-xs text-muted-foreground mb-1 block">Тональность</label>
-                            <div className="flex gap-1">
-                              <select
-                                value={item.custom_key_root ?? ''}
-                                onChange={e => saveItemField(item.id, { custom_key_root: e.target.value || null })}
-                                className="rounded border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
-                              >
-                                <option value="">— авто</option>
-                                {ROOTS.map(r => (
-                                  <option key={r} value={r}>{r}</option>
-                                ))}
-                              </select>
-                              <select
-                                value={item.custom_key_quality ?? ''}
-                                onChange={e => saveItemField(item.id, { custom_key_quality: e.target.value || null })}
-                                className="rounded border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
-                              >
-                                <option value="">—</option>
-                                <option value="maj">maj</option>
-                                <option value="m">m</option>
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground mb-1 block">Переход (заметки)</label>
-                          <textarea
-                            value={item.transition_notes ?? ''}
-                            onChange={e => saveItemField(item.id, { transition_notes: e.target.value || null })}
-                            rows={2}
-                            placeholder="Например: плавно, без паузы..."
-                            className="w-full rounded border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring placeholder:text-muted-foreground resize-none"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <button
-            onClick={openModal}
-            className="w-full rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-          >
-            + Добавить песню
-          </button>
+        {/* Songs header */}
+        <div style={{ fontSize: 10.5, fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--subtle)', textTransform: 'uppercase', marginBottom: 10 }}>
+          Песни · {items.length}
         </div>
 
+        {/* Songs list */}
+        {items.length > 0 && (
+          <div style={{
+            border: '1px solid var(--hairline)',
+            borderRadius: 'var(--radius)',
+            overflow: 'hidden',
+            background: 'var(--surface)',
+            marginBottom: 12,
+          }}>
+            {items.map((item, index) => {
+              const song = item.songs
+              const keyRoot = item.custom_key_root ?? song.key_root
+              const keyQuality = item.custom_key_quality ?? song.key_quality
+              const keyTone = getKeyTone(keyQuality)
+              const keyLabel = keyRoot ? `${keyRoot}${keyQuality === 'm' ? 'm' : ''}` : null
+              const isExpanded = expanded.has(item.id)
+
+              return (
+                <div key={item.id} style={{ borderBottom: index < items.length - 1 ? '1px solid var(--hairline)' : 'none' }}>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', transition: 'background 80ms' }}
+                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-2)')}
+                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+                  >
+                    {/* Position number */}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--subtle)', width: 20, flexShrink: 0, textAlign: 'right' }}>
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+
+                    {/* Song info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {song.name}
+                      </div>
+                      {song.original_artist && (
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>{song.original_artist}</div>
+                      )}
+                    </div>
+
+                    {/* Key + BPM */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      {keyLabel && (
+                        <span className="key-chip" data-tone={keyTone}>{keyLabel}</span>
+                      )}
+                      {song.bpm && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--subtle)' }}>{song.bpm}</span>
+                      )}
+                    </div>
+
+                    {/* Controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                      {(
+                        [
+                          { label: '↑', title: 'Выше', onClick: () => moveItem(index, -1), disabled: index === 0 },
+                          { label: '↓', title: 'Ниже', onClick: () => moveItem(index, 1), disabled: index === items.length - 1 },
+                          { label: '▾', title: 'Детали', onClick: () => toggleExpand(item.id), disabled: false, active: isExpanded },
+                          { label: '×', title: 'Удалить', onClick: () => removeItem(item.id), disabled: false, danger: true },
+                        ] as { label: string; title: string; onClick: () => void; disabled: boolean; active?: boolean; danger?: boolean }[]
+                      ).map((btn, i) => (
+                        <button
+                          key={i}
+                          onClick={btn.onClick}
+                          disabled={btn.disabled}
+                          title={btn.title}
+                          style={{
+                            width: 26, height: 26,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'none', border: 'none',
+                            color: btn.active ? 'var(--text)' : 'var(--muted)',
+                            cursor: btn.disabled ? 'default' : 'pointer',
+                            opacity: btn.disabled ? 0.25 : 1,
+                            borderRadius: 4,
+                            fontSize: btn.label === '×' ? 18 : 13,
+                            transition: 'color 100ms',
+                          }}
+                          onMouseEnter={e => {
+                            if (!btn.disabled) {
+                              e.currentTarget.style.color = btn.danger ? 'var(--minor)' : 'var(--text)'
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.color = btn.active ? 'var(--text)' : 'var(--muted)'
+                          }}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div style={{
+                      padding: '12px 16px 12px 52px',
+                      background: 'var(--surface-2)',
+                      borderTop: '1px solid var(--hairline)',
+                      display: 'flex', flexDirection: 'column', gap: 12,
+                    }}>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, color: 'var(--subtle)', marginBottom: 4 }}>Тональность</label>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <select
+                              value={item.custom_key_root ?? ''}
+                              onChange={e => saveItemField(item.id, { custom_key_root: e.target.value || null })}
+                              style={{
+                                border: '1px solid var(--border)',
+                                borderRadius: 'var(--radius-xs)',
+                                background: 'var(--surface)',
+                                color: 'var(--text)',
+                                padding: '4px 8px',
+                                fontSize: 12,
+                                fontFamily: 'var(--font-mono)',
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <option value="">— авто</option>
+                              {ROOTS.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                            <select
+                              value={item.custom_key_quality ?? ''}
+                              onChange={e => saveItemField(item.id, { custom_key_quality: e.target.value || null })}
+                              style={{
+                                border: '1px solid var(--border)',
+                                borderRadius: 'var(--radius-xs)',
+                                background: 'var(--surface)',
+                                color: 'var(--text)',
+                                padding: '4px 8px',
+                                fontSize: 12,
+                                fontFamily: 'var(--font-mono)',
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <option value="">—</option>
+                              <option value="maj">maj</option>
+                              <option value="m">m</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11, color: 'var(--subtle)', marginBottom: 4 }}>Переход (заметки)</label>
+                        <textarea
+                          value={item.transition_notes ?? ''}
+                          onChange={e => saveItemField(item.id, { transition_notes: e.target.value || null })}
+                          rows={2}
+                          placeholder="Например: плавно, без паузы..."
+                          style={{
+                            width: '100%', resize: 'none',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-xs)',
+                            background: 'var(--surface)',
+                            color: 'var(--text)',
+                            padding: '6px 10px',
+                            fontSize: 12,
+                            outline: 'none',
+                            fontFamily: 'var(--font-ui)',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Add song button */}
+        <button
+          onClick={openModal}
+          style={{
+            display: 'block', width: '100%',
+            padding: '12px',
+            border: '1px dashed var(--border)',
+            borderRadius: 'var(--radius)',
+            background: 'transparent',
+            color: 'var(--muted)',
+            fontSize: 13,
+            cursor: 'pointer',
+            transition: 'color 100ms, border-color 100ms',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.color = 'var(--text)'
+            e.currentTarget.style.borderColor = 'var(--border-strong)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.color = 'var(--muted)'
+            e.currentTarget.style.borderColor = 'var(--border)'
+          }}
+        >
+          + Добавить песню
+        </button>
+
         {/* Delete */}
-        <div className="pt-4 border-t border-border">
+        <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--hairline)' }}>
           <button
             onClick={deleteSetlist}
-            className="text-sm text-muted-foreground hover:text-destructive transition-colors"
+            style={{ fontSize: 12.5, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 100ms' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--minor)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
           >
             Удалить сетлист
           </button>
         </div>
       </div>
 
-      {/* Add song modal */}
+      {/* ── Add song modal ── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-background/90 backdrop-blur flex flex-col">
-          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-            <button
-              onClick={() => setShowModal(false)}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              ✕
-            </button>
-            <input
-              autoFocus
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Поиск..."
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {filteredSongs.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Ничего не найдено</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {filteredSongs.map(song => {
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: 'oklch(0 0 0 / 0.5)',
+          display: 'flex', alignItems: 'flex-end',
+        }}>
+          <div style={{
+            width: '100%', maxHeight: '70vh',
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            {/* Modal header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 20px',
+              borderBottom: '1px solid var(--hairline)',
+            }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16 }}
+              >✕</button>
+              <input
+                autoFocus
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Поиск..."
+                style={{
+                  flex: 1, background: 'transparent',
+                  border: 'none', outline: 'none',
+                  fontSize: 14, color: 'var(--text)',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              />
+            </div>
+
+            {/* Song list */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {filteredSongs.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  Ничего не найдено
+                </div>
+              ) : (
+                filteredSongs.map((song, i) => {
                   const alreadyIn = inSetlistIds.has(song.id)
                   return (
                     <button
                       key={song.id}
                       onClick={() => !alreadyIn && addSong(song)}
                       disabled={alreadyIn}
-                      className={`w-full px-4 py-3 text-left flex items-center gap-3 transition-colors ${
-                        alreadyIn
-                          ? 'opacity-40 cursor-not-allowed'
-                          : 'hover:bg-muted/50'
-                      }`}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        width: '100%', padding: '10px 20px',
+                        border: 'none',
+                        borderBottom: i < filteredSongs.length - 1 ? '1px solid var(--hairline)' : 'none',
+                        background: 'transparent',
+                        cursor: alreadyIn ? 'default' : 'pointer',
+                        opacity: alreadyIn ? 0.4 : 1,
+                        textAlign: 'left',
+                        transition: 'background 80ms',
+                      }}
+                      onMouseEnter={e => { if (!alreadyIn) e.currentTarget.style.background = 'var(--surface-2)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{song.name}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, color: 'var(--text)', fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {song.name}
+                        </div>
                         {song.original_artist && (
-                          <div className="text-xs text-muted-foreground truncate">{song.original_artist}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{song.original_artist}</div>
                         )}
                       </div>
                       {alreadyIn && (
-                        <span className="text-xs text-muted-foreground shrink-0">✓ уже в сетлисте</span>
+                        <span style={{ fontSize: 11.5, color: 'var(--muted)', flexShrink: 0 }}>✓ уже в сетлисте</span>
                       )}
                     </button>
                   )
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Layout } from '@/components/Layout'
 import { SongsList } from '@/screens/SongsList'
 import { SongEditor } from '@/screens/SongEditor'
 import { Concert } from '@/screens/Concert'
@@ -10,12 +11,12 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<SongsList />} />
-        <Route path="/songs/new" element={<SongEditor />} />
-        <Route path="/songs/:id" element={<SongEditor />} />
+        <Route path="/" element={<Layout><SongsList /></Layout>} />
+        <Route path="/songs/new" element={<Layout><SongEditor /></Layout>} />
+        <Route path="/songs/:id" element={<Layout><SongEditor /></Layout>} />
         <Route path="/songs/:id/concert" element={<Concert />} />
-        <Route path="/setlists" element={<SetlistsList />} />
-        <Route path="/setlists/:id" element={<SetlistEditor />} />
+        <Route path="/setlists" element={<Layout><SetlistsList /></Layout>} />
+        <Route path="/setlists/:id" element={<Layout><SetlistEditor /></Layout>} />
         <Route path="/setlists/:id/concert" element={<SetlistConcert />} />
       </Routes>
     </BrowserRouter>
