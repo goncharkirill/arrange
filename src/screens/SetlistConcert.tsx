@@ -2,7 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Setlist, Block } from '@/types/db'
-import { formatChord, transposeNote, transposeProgression } from '@/lib/chord'
+import { formatChord, transposeNote, transposeProgression, normalizeProgression } from '@/lib/chord'
 
 type SetlistSongRow = {
   id: string
@@ -261,16 +261,13 @@ export function SetlistConcert() {
             {blocks.length > 0 && (
               <div className="w-full max-w-lg space-y-1.5 mb-8">
                 {blocks.map(block => {
-                  const progression = block.progression ?? []
-                  const displayProg = transpose !== 0 && Array.isArray(progression)
-                    ? transposeProgression(
-                        progression as { root: string; quality: string; bass?: string | null }[],
-                        transpose,
-                      )
-                    : (progression as { root: string; quality: string; bass?: string | null }[])
+                  const blockRows = normalizeProgression(block.progression)
+                  const displayRows = transpose !== 0
+                    ? transposeProgression(blockRows, transpose)
+                    : blockRows
 
-                  const chordsStr = displayProg.length > 0
-                    ? displayProg.map(c => formatChord(c.root, c.quality, c.bass)).join(' ')
+                  const chordsStr = displayRows.length > 0
+                    ? displayRows.map(row => row.map(c => formatChord(c.root, c.quality, c.bass)).join(' ')).join(' · ')
                     : 'N.C.'
 
                   const typeLabel = BLOCK_TYPE_LABEL[block.type] ?? block.type.toUpperCase()

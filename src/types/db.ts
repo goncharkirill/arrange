@@ -231,7 +231,7 @@ export interface Block {
   custom_label: string | null
   bars: number | null
   repeat_count: number | null
-  progression: ChordVoicing[] | null
+  progression: ChordVoicing[][] | null
   lyrics: string | null
   bass_notes: string | null
   note: string | null
