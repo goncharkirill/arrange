@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams, Link } from 'react-router-dom'
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor,
+  useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, verticalListSortingStrategy,
+  useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '@/lib/supabase'
 import type { Band, Song, Block, ChordVoicing, SongStatus, KeyQuality, BlockType } from '@/types/db'
 import { ROOTS, QUALITIES, formatChord, transposeProgression, transposeNote } from '@/lib/chord'
@@ -186,26 +195,25 @@ function ChordPicker({ value, onChange, onClose, rect }: ChordPickerProps) {
   )
 }
 
-// ─── Block Row (roadmap table row) ───────────────────────────────────────────
+// ─── Block Row (sortable div row) ────────────────────────────────────────────
 
 interface BlockRowProps {
   block: Block
   transpose: number
   variableTime: boolean
-  isFirst: boolean
-  isLast: boolean
   onUpdate: (id: string, patch: Partial<Block>) => void
   onDelete: (id: string) => void
   onDuplicate: (id: string) => void
-  onMove: (id: string, dir: 'up' | 'down') => void
 }
 
-function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, onDelete, onDuplicate, onMove }: BlockRowProps) {
+function BlockRow({ block, transpose, variableTime, onUpdate, onDelete, onDuplicate }: BlockRowProps) {
   const [pickerIndex, setPickerIndex] = useState<number | null>(null)
   const [pickerRect, setPickerRect] = useState<DOMRect | null>(null)
   const [hovered, setHovered] = useState(false)
   const progression = block.progression ?? []
   const displayProg = transpose !== 0 ? transposeProgression(progression, transpose) : progression
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id })
 
   function addChord() {
     onUpdate(block.id, { progression: [...progression, { root: 'C', quality: 'maj', bass: null }] })
@@ -224,13 +232,44 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
   const hasExtra = !!(block.bass_notes || block.note)
 
   return (
-    <tr
+    <div
+      ref={setNodeRef}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ background: hovered ? 'var(--surface-2)' : 'transparent', transition: 'background 80ms' }}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '20px auto auto 1fr auto',
+        alignItems: 'start',
+        borderBottom: '1px solid var(--hairline)',
+        background: isDragging ? 'var(--surface-3)' : hovered ? 'var(--surface-2)' : 'transparent',
+        opacity: isDragging ? 0.5 : 1,
+        transform: CSS.Transform.toString(transform),
+        transition,
+        position: 'relative',
+      }}
     >
-      {/* Type badge with selector */}
-      <td style={{ padding: '10px 16px 10px 20px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          padding: '12px 0 12px 6px',
+          cursor: 'grab',
+          color: hovered ? 'var(--muted)' : 'var(--faint)',
+          display: 'flex', alignItems: 'flex-start',
+          touchAction: 'none',
+        }}
+        title="Перетащить"
+      >
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+          <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
+          <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
+          <circle cx="3" cy="11" r="1.2"/><circle cx="7" cy="11" r="1.2"/>
+        </svg>
+      </div>
+
+      {/* Type badge */}
+      <div style={{ padding: '10px 12px 10px 6px' }}>
         <select
           value={block.type}
           onChange={e => onUpdate(block.id, { type: e.target.value as BlockType })}
@@ -240,10 +279,10 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
         >
           {BLOCK_TYPES.map(t => <option key={t.value} value={t.value}>{t.value}</option>)}
         </select>
-      </td>
+      </div>
 
       {/* Bars */}
-      <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+      <div style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--muted)', fontSize: 12 }}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>(</span>
           <input
@@ -277,10 +316,10 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
             </select>
           )}
         </div>
-      </td>
+      </div>
 
       {/* Chords + notes */}
-      <td style={{ padding: '10px 20px 10px 12px', verticalAlign: 'top', width: '100%' }}>
+      <div style={{ padding: '10px 16px 10px 0', minWidth: 0 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, minHeight: 28 }}>
           {displayProg.length === 0 && (
             <span style={{ fontStyle: 'italic', color: 'var(--muted)', fontSize: 12 }}>N.C.</span>
@@ -353,7 +392,7 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
           )}
         </div>
 
-        {/* Extra meta: bass_notes / note / lyrics */}
+        {/* Extra meta */}
         {hasExtra && (
           <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
             {block.bass_notes && (
@@ -371,7 +410,7 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
           </div>
         )}
 
-        {/* Lyrics textarea */}
+        {/* Lyrics */}
         <textarea
           value={block.lyrics ?? ''}
           onChange={e => onUpdate(block.id, { lyrics: e.target.value || null })}
@@ -391,38 +430,12 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
             display: block.lyrics ? 'block' : hovered ? 'block' : 'none',
           }}
         />
-      </td>
+      </div>
 
-      {/* Actions: move / duplicate / delete */}
-      <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+      {/* Actions: duplicate / delete */}
+      <div style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
         {hovered && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <button
-              onClick={() => onMove(block.id, 'up')}
-              disabled={isFirst}
-              title="Переместить вверх"
-              style={{
-                background: 'none', border: 'none', cursor: isFirst ? 'default' : 'pointer',
-                color: isFirst ? 'var(--faint)' : 'var(--muted)',
-                fontSize: 12, lineHeight: 1, padding: '2px 3px',
-                transition: 'color 100ms',
-              }}
-              onMouseEnter={e => { if (!isFirst) e.currentTarget.style.color = 'var(--text)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = isFirst ? 'var(--faint)' : 'var(--muted)' }}
-            >↑</button>
-            <button
-              onClick={() => onMove(block.id, 'down')}
-              disabled={isLast}
-              title="Переместить вниз"
-              style={{
-                background: 'none', border: 'none', cursor: isLast ? 'default' : 'pointer',
-                color: isLast ? 'var(--faint)' : 'var(--muted)',
-                fontSize: 12, lineHeight: 1, padding: '2px 3px',
-                transition: 'color 100ms',
-              }}
-              onMouseEnter={e => { if (!isLast) e.currentTarget.style.color = 'var(--text)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = isLast ? 'var(--faint)' : 'var(--muted)' }}
-            >↓</button>
             <button
               onClick={() => onDuplicate(block.id)}
               title="Дублировать блок"
@@ -447,8 +460,8 @@ function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, o
             >×</button>
           </div>
         )}
-      </td>
-    </tr>
+      </div>
+    </div>
   )
 }
 
@@ -551,23 +564,22 @@ export function SongEditor() {
     }
   }
 
-  async function moveBlock(blockId: string, dir: 'up' | 'down') {
-    const idx = blocks.findIndex(b => b.id === blockId)
-    if (dir === 'up' && idx === 0) return
-    if (dir === 'down' && idx === blocks.length - 1) return
-    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
-    const posA = blocks[idx].position
-    const posB = blocks[swapIdx].position
-    setBlocks(prev => {
-      const next = [...prev]
-      next[idx] = { ...next[idx], position: posB }
-      next[swapIdx] = { ...next[swapIdx], position: posA }
-      return next.sort((a, b) => a.position - b.position)
-    })
-    await Promise.all([
-      supabase.from('blocks').update({ position: posB }).eq('id', blockId),
-      supabase.from('blocks').update({ position: posA }).eq('id', blocks[swapIdx].id),
-    ])
+  // ── Drag-and-drop ──
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  )
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = blocks.findIndex(b => b.id === active.id)
+    const newIdx = blocks.findIndex(b => b.id === over.id)
+    const reordered = arrayMove(blocks, oldIdx, newIdx).map((b, i) => ({ ...b, position: i }))
+    setBlocks(reordered)
+    await Promise.all(reordered.map(b =>
+      supabase.from('blocks').update({ position: b.position }).eq('id', b.id)
+    ))
   }
 
   // ── Apply transpose ──
@@ -912,69 +924,69 @@ export function SongEditor() {
             </span>
           </div>
 
-          {/* Roadmap table */}
+          {/* Roadmap */}
           <div style={{
             border: '1px solid var(--hairline)',
             borderRadius: 'var(--radius)',
             overflow: 'hidden',
             marginBottom: 24,
+            fontSize: 12.5,
           }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-              <thead>
-                <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--hairline)' }}>
-                  <th style={{ textAlign: 'left', padding: '7px 16px 7px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Секция</th>
-                  <th style={{ textAlign: 'left', padding: '7px 12px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Такты</th>
-                  <th style={{ textAlign: 'left', padding: '7px 12px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Аккорды / заметки</th>
-                  <th style={{ width: 32 }} />
-                </tr>
-              </thead>
-              <tbody>
+            {/* Header */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '20px auto auto 1fr auto',
+              background: 'var(--surface-2)', borderBottom: '1px solid var(--hairline)',
+              padding: '7px 12px 7px 6px',
+            }}>
+              <div />
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', paddingLeft: 6 }}>Секция</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', paddingLeft: 12 }}>Такты</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Аккорды / заметки</div>
+              <div />
+            </div>
+
+            {/* Sortable blocks */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
                 {blocks.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                      Нет блоков
-                    </td>
-                  </tr>
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Нет блоков
+                  </div>
                 ) : (
-                  blocks.map((block, i) => (
+                  blocks.map(block => (
                     <BlockRow
                       key={block.id}
                       block={block}
                       transpose={transpose}
                       variableTime={isVariableTime}
-                      isFirst={i === 0}
-                      isLast={i === blocks.length - 1}
                       onUpdate={updateBlock}
                       onDelete={deleteBlock}
                       onDuplicate={duplicateBlock}
-                      onMove={moveBlock}
                     />
                   ))
                 )}
+              </SortableContext>
+            </DndContext>
 
-                {/* Add block row */}
-                <tr style={{ borderTop: '1px dashed var(--hairline)' }}>
-                  <td colSpan={4}>
-                    <button
-                      onClick={addBlock}
-                      style={{
-                        display: 'block', width: '100%',
-                        padding: '10px 20px',
-                        background: 'transparent', border: 'none',
-                        color: 'var(--muted)',
-                        fontFamily: 'var(--font-mono)', fontSize: 12,
-                        textAlign: 'left', cursor: 'pointer',
-                        transition: 'color 100ms',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
-                    >
-                      + Добавить блок
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            {/* Add block */}
+            <div style={{ borderTop: '1px dashed var(--hairline)' }}>
+              <button
+                onClick={addBlock}
+                style={{
+                  display: 'block', width: '100%',
+                  padding: '10px 20px',
+                  background: 'transparent', border: 'none',
+                  color: 'var(--muted)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12,
+                  textAlign: 'left', cursor: 'pointer',
+                  transition: 'color 100ms',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+              >
+                + Добавить блок
+              </button>
+            </div>
           </div>
 
           {/* Lyrics section */}
