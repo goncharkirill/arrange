@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '@/lib/supabase'
-import type { Band, Song, Block, ChordVoicing, SongStatus, KeyQuality, BlockType } from '@/types/db'
+import type { Band, Song, Block, ChordVoicing, ProgressionRow, SongStatus, KeyQuality, BlockType } from '@/types/db'
 import { ROOTS, QUALITIES, formatChord, transposeProgression, transposeNote, normalizeProgression } from '@/lib/chord'
 import { Button } from '@/components/ui/button'
 
@@ -211,35 +211,42 @@ function BlockRow({ block, transpose, variableTime, onUpdate, onDelete, onDuplic
   const [pickerChordIndex, setPickerChordIndex] = useState<number | null>(null)
   const [pickerRect, setPickerRect] = useState<DOMRect | null>(null)
   const [hovered, setHovered] = useState(false)
+  const [openNoteRow, setOpenNoteRow] = useState<number | null>(null)
   const rows = normalizeProgression(block.progression)
   const displayRows = transpose !== 0 ? transposeProgression(rows, transpose) : rows
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id })
 
   function addChord() {
-    const newRows = rows.length === 0
-      ? [[{ root: 'C', quality: 'maj', bass: null }]]
-      : rows.map((r, i) => i === rows.length - 1 ? [...r, { root: 'C', quality: 'maj', bass: null }] : r)
-    onUpdate(block.id, { progression: newRows as ChordVoicing[][] })
+    const newRow: ProgressionRow = { chords: [{ root: 'C', quality: 'maj', bass: null }], note: null }
+    const newRows: ProgressionRow[] = rows.length === 0
+      ? [newRow]
+      : rows.map((r, i) => i === rows.length - 1 ? { ...r, chords: [...r.chords, { root: 'C', quality: 'maj', bass: null }] } : r)
+    onUpdate(block.id, { progression: newRows as any })
   }
 
   function addRow() {
-    const newRows = [...rows, [{ root: 'C', quality: 'maj', bass: null }]]
-    onUpdate(block.id, { progression: newRows as ChordVoicing[][] })
+    const newRows: ProgressionRow[] = [...rows, { chords: [{ root: 'C', quality: 'maj', bass: null }], note: null }]
+    onUpdate(block.id, { progression: newRows as any })
   }
 
   function updateChord(rowIdx: number, chordIdx: number, c: ChordVoicing) {
     const newRows = rows.map((r, ri) =>
-      ri === rowIdx ? r.map((ch, ci) => ci === chordIdx ? c : ch) : r
+      ri === rowIdx ? { ...r, chords: r.chords.map((ch, ci) => ci === chordIdx ? c : ch) } : r
     )
-    onUpdate(block.id, { progression: newRows as ChordVoicing[][] })
+    onUpdate(block.id, { progression: newRows as any })
   }
 
   function removeChord(rowIdx: number, chordIdx: number) {
     const newRows = rows
-      .map((r, ri) => ri === rowIdx ? r.filter((_, ci) => ci !== chordIdx) : r)
-      .filter(r => r.length > 0)
-    onUpdate(block.id, { progression: newRows as ChordVoicing[][] })
+      .map((r, ri) => ri === rowIdx ? { ...r, chords: r.chords.filter((_, ci) => ci !== chordIdx) } : r)
+      .filter(r => r.chords.length > 0)
+    onUpdate(block.id, { progression: newRows as any })
+  }
+
+  function updateRowNote(rowIdx: number, note: string) {
+    const newRows = rows.map((r, ri) => ri === rowIdx ? { ...r, note: note || null } : r)
+    onUpdate(block.id, { progression: newRows as any })
   }
 
   const hasExtra = !!(block.bass_notes || block.note)
@@ -338,59 +345,105 @@ function BlockRow({ block, transpose, variableTime, onUpdate, onDelete, onDuplic
             <span style={{ fontStyle: 'italic', color: 'var(--muted)', fontSize: 12 }}>N.C.</span>
           )}
           {displayRows.map((row, ri) => (
-            <div key={ri} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-              {row.map((chord, ci) => (
-                <div key={ci} style={{ position: 'relative' }}>
-                  <button
-                    onClick={e => {
-                      const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-                      setPickerRect(rect)
-                      if (pickerRowIndex === ri && pickerChordIndex === ci) {
-                        setPickerRowIndex(null); setPickerChordIndex(null)
-                      } else {
-                        setPickerRowIndex(ri); setPickerChordIndex(ci)
-                      }
-                    }}
-                    style={{
-                      background: 'var(--surface-2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-xs)',
-                      padding: '2px 8px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 13, fontWeight: 500,
-                      cursor: 'pointer',
-                      color: isMinorQuality(chord.quality) ? 'var(--minor)' : 'var(--text)',
-                      transition: 'background 80ms',
-                    }}
-                  >
-                    {formatChord(chord.root, chord.quality, chord.bass)}
-                  </button>
-                  {pickerRowIndex === ri && pickerChordIndex === ci && pickerRect && (
-                    <ChordPicker
-                      value={rows[ri]?.[ci] ?? null}
-                      onChange={c => { updateChord(ri, ci, c); setPickerRowIndex(null); setPickerChordIndex(null) }}
-                      onClose={() => { setPickerRowIndex(null); setPickerChordIndex(null) }}
-                      rect={pickerRect}
-                    />
-                  )}
-                  {hovered && (
+            <div key={ri} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+                {row.chords.map((chord, ci) => (
+                  <div key={ci} style={{ position: 'relative' }}>
                     <button
-                      onClick={() => removeChord(ri, ci)}
-                      style={{
-                        position: 'absolute', top: -6, right: -6,
-                        width: 14, height: 14,
-                        borderRadius: '50%',
-                        background: 'var(--muted)',
-                        color: 'var(--surface)',
-                        border: 'none',
-                        fontSize: 9, lineHeight: 1,
-                        cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      onClick={e => {
+                        const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                        setPickerRect(rect)
+                        if (pickerRowIndex === ri && pickerChordIndex === ci) {
+                          setPickerRowIndex(null); setPickerChordIndex(null)
+                        } else {
+                          setPickerRowIndex(ri); setPickerChordIndex(ci)
+                        }
                       }}
-                    >×</button>
-                  )}
-                </div>
-              ))}
+                      style={{
+                        background: 'var(--surface-2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-xs)',
+                        padding: '2px 8px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 13, fontWeight: 500,
+                        cursor: 'pointer',
+                        color: isMinorQuality(chord.quality) ? 'var(--minor)' : 'var(--text)',
+                        transition: 'background 80ms',
+                      }}
+                    >
+                      {formatChord(chord.root, chord.quality, chord.bass)}
+                    </button>
+                    {pickerRowIndex === ri && pickerChordIndex === ci && pickerRect && (
+                      <ChordPicker
+                        value={rows[ri]?.chords[ci] ?? null}
+                        onChange={c => { updateChord(ri, ci, c); setPickerRowIndex(null); setPickerChordIndex(null) }}
+                        onClose={() => { setPickerRowIndex(null); setPickerChordIndex(null) }}
+                        rect={pickerRect}
+                      />
+                    )}
+                    {hovered && (
+                      <button
+                        onClick={() => removeChord(ri, ci)}
+                        style={{
+                          position: 'absolute', top: -6, right: -6,
+                          width: 14, height: 14,
+                          borderRadius: '50%',
+                          background: 'var(--muted)',
+                          color: 'var(--surface)',
+                          border: 'none',
+                          fontSize: 9, lineHeight: 1,
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >×</button>
+                    )}
+                  </div>
+                ))}
+                {/* Note toggle button */}
+                <button
+                  onClick={() => setOpenNoteRow(openNoteRow === ri ? null : ri)}
+                  title={rows[ri]?.note ? rows[ri].note! : 'Добавить комментарий к строке'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    padding: '2px 4px',
+                    borderRadius: 3,
+                    color: rows[ri]?.note ? 'var(--accent)' : hovered ? 'var(--muted)' : 'transparent',
+                    transition: 'color 100ms',
+                  }}
+                >✎</button>
+              </div>
+              {/* Note input (shown when open) */}
+              {openNoteRow === ri && (
+                <input
+                  autoFocus
+                  type="text"
+                  value={rows[ri]?.note ?? ''}
+                  onChange={e => updateRowNote(ri, e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setOpenNoteRow(null) }}
+                  placeholder="Комментарий к строке..."
+                  style={{
+                    width: '100%',
+                    fontSize: 11.5,
+                    fontFamily: 'var(--font-ui)',
+                    color: 'var(--text-2)',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-xs)',
+                    padding: '3px 8px',
+                    outline: 'none',
+                  }}
+                />
+              )}
+              {/* Show existing note as muted text (when input is closed) */}
+              {openNoteRow !== ri && rows[ri]?.note && (
+                <span style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--muted)', paddingLeft: 2 }}>
+                  {rows[ri].note}
+                </span>
+              )}
             </div>
           ))}
           {hovered && (
