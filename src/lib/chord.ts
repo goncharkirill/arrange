@@ -50,14 +50,25 @@ export function formatChord(root: string, quality: string, bass?: string | null)
   return `${root}${q}${b}`
 }
 
-/** Transpose a full chord progression by semitones */
+/** Transpose a full chord progression (2D) by semitones */
 export function transposeProgression(
-  progression: { root: string; quality: string; bass?: string | null }[],
+  progression: { root: string; quality: string; bass?: string | null }[][],
   semitones: number,
-): { root: string; quality: string; bass?: string | null }[] {
-  return progression.map(({ root, quality, bass }) => ({
-    root: transposeNote(root, semitones),
-    quality,
-    bass: bass ? transposeNote(bass, semitones) : bass,
-  }))
+): { root: string; quality: string; bass?: string | null }[][] {
+  return progression.map(row =>
+    row.map(({ root, quality, bass }) => ({
+      root: transposeNote(root, semitones),
+      quality,
+      bass: bass ? transposeNote(bass, semitones) : bass,
+    }))
+  )
+}
+
+/** Normalize progression from old 1D format (legacy DB data) or new 2D format */
+export function normalizeProgression(raw: unknown): { root: string; quality: string; bass?: string | null }[][] {
+  if (!raw || !Array.isArray(raw) || raw.length === 0) return []
+  // If first element is an array → already 2D
+  if (Array.isArray(raw[0])) return raw as { root: string; quality: string; bass?: string | null }[][]
+  // Old 1D format → wrap in array to make 2D
+  return [raw as { root: string; quality: string; bass?: string | null }[]]
 }

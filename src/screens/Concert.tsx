@@ -2,7 +2,7 @@ import { useEffect, useCallback, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Song, Block } from '@/types/db'
-import { formatChord, transposeProgression, transposeNote } from '@/lib/chord'
+import { formatChord, transposeProgression, transposeNote, normalizeProgression } from '@/lib/chord'
 
 const BLOCK_TYPE_LABEL: Record<string, string> = {
   intro:        'INTRO',
@@ -112,10 +112,8 @@ export function Concert() {
   )
 
   const block = blocks[current]
-  const progression = block.progression ?? []
-  const displayProg = transpose !== 0
-    ? transposeProgression(progression, transpose)
-    : progression
+  const rows = normalizeProgression(block.progression)
+  const displayRows = transpose !== 0 ? transposeProgression(rows, transpose) : rows
 
   const keyRoot = song.key_root
     ? transposeNote(song.key_root, transpose)
@@ -244,19 +242,20 @@ export function Concert() {
             </div>
 
             {/* Chord progression */}
-            {displayProg.length > 0 ? (
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-4 mb-8">
-                {displayProg.map((chord, i) => (
-                  <span
-                    key={i}
-                    className="font-mono text-5xl font-bold tracking-tight text-zinc-100 leading-none"
-                  >
-                    {formatChord(chord.root, chord.quality, chord.bass)}
-                  </span>
+            {displayRows.length === 0 ? (
+              <div className="mb-8 text-zinc-700 font-mono text-2xl italic">N.C.</div>
+            ) : (
+              <div className="flex flex-col gap-2 mb-8">
+                {displayRows.map((row, ri) => (
+                  <div key={ri} className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                    {row.map((chord, ci) => (
+                      <span key={ci} className="font-mono text-5xl font-bold tracking-tight text-zinc-100 leading-none">
+                        {formatChord(chord.root, chord.quality, chord.bass)}
+                      </span>
+                    ))}
+                  </div>
                 ))}
               </div>
-            ) : (
-              <div className="mb-8 text-zinc-700 font-mono text-2xl italic">N.C.</div>
             )}
 
             {/* Lyrics */}
