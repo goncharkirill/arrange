@@ -192,11 +192,15 @@ interface BlockRowProps {
   block: Block
   transpose: number
   variableTime: boolean
+  isFirst: boolean
+  isLast: boolean
   onUpdate: (id: string, patch: Partial<Block>) => void
   onDelete: (id: string) => void
+  onDuplicate: (id: string) => void
+  onMove: (id: string, dir: 'up' | 'down') => void
 }
 
-function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockRowProps) {
+function BlockRow({ block, transpose, variableTime, isFirst, isLast, onUpdate, onDelete, onDuplicate, onMove }: BlockRowProps) {
   const [pickerIndex, setPickerIndex] = useState<number | null>(null)
   const [pickerRect, setPickerRect] = useState<DOMRect | null>(null)
   const [hovered, setHovered] = useState(false)
@@ -389,22 +393,59 @@ function BlockRow({ block, transpose, variableTime, onUpdate, onDelete }: BlockR
         />
       </td>
 
-      {/* Action: delete */}
-      <td style={{ padding: '10px 16px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+      {/* Actions: move / duplicate / delete */}
+      <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
         {hovered && (
-          <button
-            onClick={() => onDelete(block.id)}
-            style={{
-              background: 'none', border: 'none',
-              color: 'var(--muted)',
-              cursor: 'pointer', fontSize: 16,
-              lineHeight: 1, padding: 0,
-              transition: 'color 100ms',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--minor)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
-            title="Удалить блок"
-          >×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              onClick={() => onMove(block.id, 'up')}
+              disabled={isFirst}
+              title="Переместить вверх"
+              style={{
+                background: 'none', border: 'none', cursor: isFirst ? 'default' : 'pointer',
+                color: isFirst ? 'var(--faint)' : 'var(--muted)',
+                fontSize: 12, lineHeight: 1, padding: '2px 3px',
+                transition: 'color 100ms',
+              }}
+              onMouseEnter={e => { if (!isFirst) e.currentTarget.style.color = 'var(--text)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = isFirst ? 'var(--faint)' : 'var(--muted)' }}
+            >↑</button>
+            <button
+              onClick={() => onMove(block.id, 'down')}
+              disabled={isLast}
+              title="Переместить вниз"
+              style={{
+                background: 'none', border: 'none', cursor: isLast ? 'default' : 'pointer',
+                color: isLast ? 'var(--faint)' : 'var(--muted)',
+                fontSize: 12, lineHeight: 1, padding: '2px 3px',
+                transition: 'color 100ms',
+              }}
+              onMouseEnter={e => { if (!isLast) e.currentTarget.style.color = 'var(--text)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = isLast ? 'var(--faint)' : 'var(--muted)' }}
+            >↓</button>
+            <button
+              onClick={() => onDuplicate(block.id)}
+              title="Дублировать блок"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--muted)', fontSize: 12, lineHeight: 1, padding: '2px 3px',
+                transition: 'color 100ms',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+            >⊕</button>
+            <button
+              onClick={() => onDelete(block.id)}
+              title="Удалить блок"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--muted)', fontSize: 14, lineHeight: 1, padding: '2px 3px',
+                transition: 'color 100ms',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--minor)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+            >×</button>
+          </div>
         )}
       </td>
     </tr>
@@ -475,6 +516,58 @@ export function SongEditor() {
   async function deleteBlock(blockId: string) {
     setBlocks(prev => prev.filter(b => b.id !== blockId))
     await supabase.from('blocks').delete().eq('id', blockId)
+  }
+
+  async function duplicateBlock(blockId: string) {
+    if (!id) return
+    const idx = blocks.findIndex(b => b.id === blockId)
+    if (idx === -1) return
+    const src = blocks[idx]
+    // Shift all blocks after insertion point up by 1
+    const afterIdx = blocks.slice(idx + 1)
+    await Promise.all(afterIdx.map(b =>
+      supabase.from('blocks').update({ position: b.position + 1 }).eq('id', b.id)
+    ))
+    const { data } = await supabase.from('blocks').insert({
+      song_id: id,
+      position: src.position + 1,
+      type: src.type,
+      custom_label: src.custom_label,
+      bars: src.bars,
+      repeat_count: src.repeat_count,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      progression: src.progression as any,
+      lyrics: src.lyrics,
+      bass_notes: src.bass_notes,
+      note: src.note,
+      time_signature: src.time_signature,
+    }).select().single()
+    if (data) {
+      setBlocks(prev => {
+        const next = prev.map(b => b.position > src.position ? { ...b, position: b.position + 1 } : b)
+        next.splice(idx + 1, 0, data as Block)
+        return next
+      })
+    }
+  }
+
+  async function moveBlock(blockId: string, dir: 'up' | 'down') {
+    const idx = blocks.findIndex(b => b.id === blockId)
+    if (dir === 'up' && idx === 0) return
+    if (dir === 'down' && idx === blocks.length - 1) return
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
+    const posA = blocks[idx].position
+    const posB = blocks[swapIdx].position
+    setBlocks(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], position: posB }
+      next[swapIdx] = { ...next[swapIdx], position: posA }
+      return next.sort((a, b) => a.position - b.position)
+    })
+    await Promise.all([
+      supabase.from('blocks').update({ position: posB }).eq('id', blockId),
+      supabase.from('blocks').update({ position: posA }).eq('id', blocks[swapIdx].id),
+    ])
   }
 
   // ── Apply transpose ──
@@ -843,14 +936,18 @@ export function SongEditor() {
                     </td>
                   </tr>
                 ) : (
-                  blocks.map(block => (
+                  blocks.map((block, i) => (
                     <BlockRow
                       key={block.id}
                       block={block}
                       transpose={transpose}
                       variableTime={isVariableTime}
+                      isFirst={i === 0}
+                      isLast={i === blocks.length - 1}
                       onUpdate={updateBlock}
                       onDelete={deleteBlock}
+                      onDuplicate={duplicateBlock}
+                      onMove={moveBlock}
                     />
                   ))
                 )}
